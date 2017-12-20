@@ -8,7 +8,7 @@ import json
 def preprocess(file_name,out_file_name):
     # 1: To delete the columns where variance is 0
     # 2: To delete the columns whose type is object
-    prepreocess_model = {'droplist':[],'min':[],'scale':[]}
+    final_drop_list = []
     print("To delete the columns where variance is 0")
     print("To delete the columns whose type is object")
     train_df=pd.read_excel(file_name)
@@ -28,7 +28,7 @@ def preprocess(file_name,out_file_name):
 
     train_df1 = train_df.drop(drop_lists1,axis=1)
     print(train_df1.shape)
-    prepreocess_model['droplist'].extend(drop_lists1)
+    final_drop_list.extend(drop_lists1)
     # train_df1.to_csv('./input/1.csv')
 
     # 3: To delete columns where NA ratio > 0.95
@@ -69,7 +69,7 @@ def preprocess(file_name,out_file_name):
     train_df2 = train_df1.drop(dropFeature_cols,axis=1)
     print(train_df2.shape)
     # train_df2.to_csv('./input/2.csv')
-    prepreocess_model['droplist'].extend(dropFeature_cols)
+    final_drop_list.extend(dropFeature_cols)
 
     # 4: To delete columns where variance is too small
     print("4: To delete columns where variance is too small")
@@ -78,20 +78,15 @@ def preprocess(file_name,out_file_name):
     for i in range(train_df2.shape[1]):
         if(train_df2.iloc[:,i].dtype!='object'):
             temp = train_df2.iloc[:,i]
-            m = temp.min()
-            s = temp.max()-temp.min()
-            temp = (temp-m)*1.0/(s)
+            temp = (temp-temp.min())*1.0/(temp.max()-temp.min())
             vt = temp.var()
             if vt < 0.03:
                 drop_lists3.append(train_df2.iloc[:,i].name)
-            else:
-                prepreocess_model['min'].append(float(m))
-                prepreocess_model['scale'].append(float(s))
     print(len(drop_lists3))
 
     train_df3 = train_df2.drop(drop_lists3,axis=1)
     print(train_df3.shape)
-    prepreocess_model['droplist'].extend(drop_lists3)
+    final_drop_list.extend(drop_lists3)
 
     # train_df3.to_csv('./input/3.csv')
 
@@ -110,20 +105,20 @@ def preprocess(file_name,out_file_name):
     train_df4 = train_df3.fillna(value=natable)
     print(train_df4.shape)
     train_df4.to_csv(out_file_name)
-    return train_df4,prepreocess_model
+    return train_df4,final_drop_list
 
 
 def main():
-    _,droplist = preprocess(sys.argv[1],sys.argv[1]+'.pd')
-    with open("%s.drop_list"%sys.argv[1]+'.pd','w') as fp:
+    _,droplist = preprocess(sys.argv[1],sys.argv[2])
+    with open("%s.drop_list"%sys.argv[2],'w') as fp:
         json.dump(droplist,fp)
     
 def main_t():
-    droplist = []
-    with open("train_data.csv.drop_list",'r') as fp:
-        droplist = json.load(fp)
+    premodel = {}
+    with open("./input/train_data.xlsx.drop_list.pd",'r') as fp:
+        premodel = json.load(fp)
     test_df=pd.read_excel(sys.argv[1])
-    test_df.drop(droplist,axis=1,inplace=True)
+    test_df.drop(premodel['droplist'],axis=1,inplace=True)
 
     natable={}
     for i in range(test_df.shape[1]):
@@ -132,9 +127,13 @@ def main_t():
             meanofcol = temp.mean()
             natable[test_df.iloc[:,i].name] = meanofcol
     test_df = test_df.fillna(value=natable)
-    test_df.to_csv(sys.argv[2])
+
+    for i in range(test_df.shape[1]):
+        temp = test_df.iloc[:,i]
+        test_df.iloc[:,i] = (temp-premodel['min'][i]*1.0)/premodel['scale'][i]
+    test_df.to_csv(sys.argv[1]+'.pd')
 
 if __name__ == '__main__':
-    # main_t()
-    main()
+    main_t()
+    #main()
 
